@@ -1,0 +1,65 @@
+import { Request, Response, NextFunction } from 'express';
+import { ApiError } from '../types';
+
+/**
+ * Global error handling middleware
+ */
+export function errorHandler(
+  err: Error,
+  _req: Request,
+  res: Response,
+  _next: NextFunction
+): void {
+  console.error('Error:', err);
+
+  // Multer errors
+  if (err.name === 'MulterError') {
+    if (err.message === 'File too large') {
+      const maxSize = process.env.MAX_FILE_SIZE_MB || '5';
+      res.status(413).json({
+        error: 'File too large',
+        details: `Maximum file size is ${maxSize}MB`,
+      } as ApiError);
+      return;
+    }
+    res.status(400).json({
+      error: 'File upload error',
+      details: err.message,
+    } as ApiError);
+    return;
+  }
+
+  // Zod validation errors (handled in controllers, but catch any stray ones)
+  if (err.name === 'ZodError') {
+    res.status(400).json({
+      error: 'Validation failed',
+      details: err.message,
+    } as ApiError);
+    return;
+  }
+
+  // Prisma errors
+  if (err.name?.includes('Prisma')) {
+    res.status(500).json({
+      error: 'Database error',
+      details: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
+    } as ApiError);
+    return;
+  }
+
+  // Default error
+  res.status(500).json({
+    error: 'Internal server error',
+    details: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong',
+  } as ApiError);
+}
+
+/**
+ * 404 Not Found handler
+ */
+export function notFoundHandler(req: Request, res: Response): void {
+  res.status(404).json({
+    error: 'Not found',
+    details: `Route ${req.method} ${req.path} does not exist`,
+  } as ApiError);
+}
